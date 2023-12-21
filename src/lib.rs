@@ -2,10 +2,10 @@ use std::{fmt, thread, collections::{HashMap, VecDeque}};
 
 #[derive(Clone)]
 pub struct Grid {
-    l: usize,
+    l: usize,       // Length of disc-line required to win
     w: usize,
     h: usize,
-    vec: Vec<u8>,
+    vec: Vec<u8>,   // 0: empty [ ], 1: player 1 [o], 2: player 2 [x], 10: player 1 highlighted, 20: player 2 highlighted
     turn: u8,
 }
 
@@ -35,7 +35,8 @@ impl Grid {
         }
     }
 
-    pub fn legal_moves(&self) -> Vec<usize> {
+    // Gives a vector with the indices of all non-full columns 
+    fn legal_moves(&self) -> Vec<usize> {
         let mut legal = Vec::new();
         for j in 0..self.w {
             if self.array(self.h-1, j) == 0 {
@@ -44,30 +45,12 @@ impl Grid {
         }
         legal
     }
-    pub fn illegal_moves(&self) -> Vec<usize> {
-        let mut illegal = Vec::new();
-        for j in 0..self.w {
-            if self.array(self.h-1, j) != 0 {
-                illegal.push(j)
-            }
-        }
-        illegal
-    }
     
-    pub fn play(&mut self, col: usize) -> usize {
-        // Returns the position where the played disc landed
-        for row in 0..self.h {
-            if self.array(row, col) == 0 {
-                self.array_set(row, col, self.turn%2 + 1);
-                self.turn += 1;
-                return row
-            }
-        }
-        // Returns an illegal position if the column was full
-       self.h
-    }
+    // Gives number of legal moves available
+    fn n_legal_f64(&self) -> f64 {
+        // Faster than running self.legal_moves.len()
+        // Used for scaling backpropagated scores in the move tree
 
-    pub fn n_legal_f64(&self) -> f64 {
         let mut n_legal = 0.;
         for j in 0..self.w {
             if self.array(self.h-1, j) == 0 {
@@ -77,7 +60,25 @@ impl Grid {
         n_legal
     }
 
-    pub fn next_grids(&self) -> HashMap<[usize; 2], Grid> {
+    
+    // Plays in a disc in  given column
+    pub fn play(&mut self, col: usize) -> usize {
+        // Returns the position where the played disc landed
+        for row in 0..self.h {
+            if self.array(row, col) == 0 {
+                self.array_set(row, col, self.turn%2 + 1);
+                self.turn += 1;
+                return row
+            }
+        }
+
+        // Returns an illegal position if the column was full
+        self.h
+    }
+
+    
+    // Gives all possible grid states that can be reached with one move 
+    fn next_grids(&self) -> HashMap<[usize; 2], Grid> {
         let moves = self.legal_moves();
         let mut grids = HashMap::with_capacity(moves.len());
         
@@ -88,7 +89,12 @@ impl Grid {
         }
         grids
     }
-    pub fn win_fast(&self, row: usize, col: usize) -> u8 {
+
+
+    // Checks if any player has l discs in a line. Only looks at lines containing the coordinate (row, col)
+    // Returns whether player 1, player 2 or neither (0) has won.
+    // Used when exploring the move tree to check if a disc played at (row, col) results in victory.
+    fn win_fast(&self, row: usize, col: usize) -> u8 {
         let player = self.array(row, col);
         
         // Column
@@ -172,16 +178,20 @@ impl Grid {
     }
 
     
+    // Starts at (i,j) and walks with step velocity (v_i,v_j) until it hits a wall.
+    // If an l-length continuous line of discs of the same type is found, then the discs
+    // in that line will be highlighted. Returns which player won or 0 if no one won.
     fn walk_highlight(&mut self, mut i: usize, mut j: usize, v_i: i8, v_j: i8) -> u8 {
-        // Same as regular walk but returns the indices of the win-line so it can be highlighted
         let mut p1_line: Vec<(usize, usize)> = Vec::with_capacity(self.l);
         let mut p2_line: Vec<(usize, usize)> = Vec::with_capacity(self.l);
         while (0..self.h).contains(&i) && (0..self.w).contains(&j) {
             match self.array(i,j) {
-                    1 => {p1_line.push((i,j)); p2_line.clear()},
-                    2 => {p1_line.clear(); p2_line.push((i,j))},
-                    _ => {p1_line.clear(); p2_line.clear()}
-                }
+                1 => {p1_line.push((i,j)); p2_line.clear()},
+                2 => {p1_line.clear(); p2_line.push((i,j))},
+                _ => {p1_line.clear(); p2_line.clear()}
+            }
+
+            // Highlights by changing 1 --> 10, 2 --> 20. 
             if p1_line.len() >= self.l {
                 for (i,j) in p1_line {
                     self.array_set(i, j, 10*self.array(i, j))
@@ -198,6 +208,10 @@ impl Grid {
         }
         0
     }
+
+
+    // Checks if any player has won and highlights the winning line.
+    // Slower than self.win_fast() but checks the whole grid. 
     pub fn win_highlight(&mut self) -> u8 {
         // Rows
         for i in 0..self.h {
@@ -234,11 +248,16 @@ impl Grid {
     }
 }
 impl fmt::Display for Grid {
-
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    // Graphical representation of the grid. 
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut output = String::with_capacity(3*self.w*self.h);
         for j in 0..self.w {
             output = format!("{output} {j} ")
+        }
+        match self.turn % 2 {
+            0 => output = format!("{output}  (o) "),
+            1 => output = format!("{output}  (x) "),
+            _ => ()
         }
         for i in 0..self.h {
             output = format!("{output}\n");
@@ -256,8 +275,9 @@ impl fmt::Display for Grid {
         write!(f, "{output}")
     }
 }
-pub struct Branch {
-    // Structure used for BFS exploration
+
+// Structure used for BFS exploration of the move tree
+struct Branch {
     root: Grid,
     queue: VecDeque<(f64, Grid)>,
     score: f64,
@@ -267,10 +287,9 @@ impl Branch {
         Branch { root: root_grid, queue: VecDeque::with_capacity(queue_capacity), score: 0. }
     }
 
-    pub fn score(&self) -> f64{
-        self.score
-    }
-
+    // Determines the score of this branch by searching through all possible combinations
+    // of moves to a given depth. The score is increased when paths to own victory is found
+    // and decreased when a paths to enemy victory is found. 
     fn bfs(&mut self, player: u8, depth: u8) {
         let mut keep_pushing = true;
 
@@ -304,9 +323,19 @@ impl Branch {
     }
 }
 
+
+
+// Determines the best possible move for a given player, based on a given search depth.
+// 
+// The depth should be greater than 1. Unresonably large depth causes memory allocation errors.
+// Uses multithreading. Makes one Branch from each top-level legal move and runs each in its own thread. 
+// 
+// Returns the index of the column whose branch has the highest score
+// 
+// Randomness is caused by internal reordering of the hashMaps when they are cloned.
 pub fn analyze_bfs_mt(grid: Grid, player: u8, depth: u8) -> usize {
-    // BFS version of analyze_mt() 
-    // Makes one thread per top-level legal move
+    
+ 
     let relevance = 1./grid.n_legal_f64();
     
     let mut handles = Vec::new();
