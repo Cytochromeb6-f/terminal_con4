@@ -1,7 +1,8 @@
 use std::{fmt, io, time::Instant};
 
-use terminal_con4::{Grid, analyze_bfs_mt};
+use terminal_con4::{Grid, analyze_minmax, analyze_bfs_mt};
 
+use rand::seq::SliceRandom;
 
 // Change this to true if there are display issues
 const NEVER_CLEAR: bool = false;
@@ -87,6 +88,9 @@ fn adversarial_game(keep_history: bool, l: usize, w: usize, h: usize, cpu_player
     // shinks over the course of the game
 
     let mut grid = Grid::new(l, w, h);
+    // for col in [1,2,1,5,1,1,1,3, 1] {
+    //     grid.play(col);
+    // }
 
     while grid.turn() < (w*h) as u8 {
         if !keep_history {
@@ -94,12 +98,12 @@ fn adversarial_game(keep_history: bool, l: usize, w: usize, h: usize, cpu_player
         }
         println!("{grid}");
         
-        if grid.turn()%2 == cpu_player-1 {
+        if grid.player_to_move() == cpu_player {
             println!("Analyzing with depth = {depth}");
             let now = Instant::now();
-            let col = analyze_bfs_mt(grid.clone(), cpu_player, depth);
+            let (col, value) = analyze_minmax(grid.clone(), cpu_player, depth);
             let calc_time = now.elapsed().as_secs_f32();
-            println!("The computer played in column {} after {} seconds", col, calc_time);         
+            println!("The computer played in column {} (value: {:.4}) after {} seconds", col, value, calc_time);         
             grid.play(col);
             
             if adaptive_depth {
@@ -141,7 +145,102 @@ fn adversarial_game(keep_history: bool, l: usize, w: usize, h: usize, cpu_player
     
 }
 
+fn computer_vs_itself(mut d_new: u8, mut d_old: u8, ramp_new: bool, ramp_old: bool, new_first: bool) {
+    
+    let l = 4;
+    let w = 7;
+    let h = 6;
 
+    let mut grid = Grid::new(l, w, h);
+    
+    // for col in [2,3,3,2,3,3] {
+    //     grid.play(col);
+    // }
+
+    let new_player;
+    let new_disc;
+    let old_disc;
+    match new_first {
+        true => {
+            new_player = 1;
+            new_disc = 'o';
+            old_disc = 'x';
+        },
+        false => {
+            new_player = 2;
+            new_disc = 'x';
+            old_disc = 'o';
+        }
+    };
+
+
+    let now = Instant::now();
+    while grid.turn() < (w*h) as u8 {
+        println!("{grid}");
+        
+        if grid.player_to_move() == new_player {
+            let now = Instant::now();
+
+            // let legal = grid.legal_moves();
+            // let col = *legal.choose(&mut rand::thread_rng()).unwrap();
+            // let value = 0;
+            
+            let (col, value) = analyze_minmax(grid.clone(), new_player, d_new);
+            
+            let calc_time = now.elapsed().as_secs_f32();
+            println!(
+                "New algorithm ({}) analyzed with depth = {} and played in column {} (value: {:.4}) after {} seconds",
+                new_disc, d_new, col, value, calc_time
+            );
+                   
+            grid.play(col);
+            if ramp_new {
+                if calc_time < 1. {     // Increase the calculation depth if it takes less than 1 second
+                    if calc_time > 0.1 {d_new += 1}
+                    else               {d_new += 2}
+                }
+            }
+        } else {
+            let now = Instant::now();
+            
+            // let legal = grid.legal_moves();
+            // let col = *legal.choose(&mut rand::thread_rng()).unwrap();
+            
+            let col = analyze_bfs_mt(grid.clone(), 3-new_player, d_old);
+            
+            let calc_time = now.elapsed().as_secs_f32();
+            println!(
+                "Old algorithm ({}) analyzed with depth = {} and played in column {} after {} seconds",
+                old_disc, d_old, col, calc_time
+            );
+            
+            grid.play(col);
+            if ramp_old {
+                if calc_time < 1. {     // Increase the calculation depth if it takes less than 1 second
+                    if calc_time > 0.1 {d_old += 1}
+                    else               {d_old += 2}
+                }
+            }
+        }
+        match grid.win_highlight() {
+            win if win == new_player => {
+                println!("new algorithm wins after {} turns", grid.turn());
+                println!("{}", grid);
+                return
+            },
+            win if win == 3 - new_player => {
+                println!("old algorithm wins after {} turns", grid.turn());
+                println!("{}", grid);
+                return
+            }
+            _ => ()
+        };
+    }
+    let elapsed = now.elapsed();
+    println!("Draw after {} seconds",elapsed.as_secs_f32());
+    println!("{}", grid);
+    
+}
 
 struct Menu {
     current_page: u8,
@@ -156,7 +255,8 @@ struct Menu {
 impl Menu {
     fn new() -> Self {
         // Default settings
-        Menu { current_page: 0, keep_history: false, l: 4, w: 7, h: 6, game_mode: 1, start_depth: 8, adaptive_depth: true}
+        Menu { current_page: 0, keep_history: true, l: 4, w: 7, h: 6, game_mode: 1, start_depth: 9, adaptive_depth: true}
+        // Menu { current_page: 0, keep_history: false, l: 4, w: 7, h: 6, game_mode: 1, start_depth: 8, adaptive_depth: true}
     }
 
 
@@ -282,9 +382,14 @@ impl fmt::Display for Menu {
 
 
 fn main() {
-    
-    let mut menu = Menu::new();
 
+    // TODO: Add alpha-beta pruning
+   
+    //  11: yes, 12: no |  https://www.helpfulgames.com/subjects/brain-training/connect-four.html
+
+    // computer_vs_itself(8, 8, false, false, true);
+
+    let mut menu = Menu::new();
     'play_again: loop {
         menu.run();
 
@@ -298,4 +403,6 @@ fn main() {
             }
         }
     }
+
+
 }
