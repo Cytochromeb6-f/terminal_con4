@@ -1,4 +1,4 @@
-use std::{fmt, thread, collections::{HashMap, VecDeque}, hash::{DefaultHasher, Hash, Hasher}};
+use std::{collections::{HashMap, VecDeque}, fmt, hash::{DefaultHasher, Hash, Hasher}, thread::{self}};
 
 
 
@@ -32,11 +32,11 @@ impl Grid {
         return self.turn%2 + 1
     }
 
-    fn array(&self, i: usize, j: usize) -> u8 {
+    fn read(&self, i: usize, j: usize) -> u8 {
         self.vec[i*self.w + j]
     }
 
-    fn array_set(&mut self, i: usize, j: usize, value: u8) {
+    fn set(&mut self, i: usize, j: usize, value: u8) {
         if (0..self.h).contains(&i) && (0..self.w).contains(&j) {
             self.vec[i*self.w + j] = value
         }
@@ -46,7 +46,7 @@ impl Grid {
     pub fn legal_moves(&self) -> Vec<usize> {
         let mut legal = Vec::new();
         for j in 0..self.w {
-            if self.array(self.h-1, j) == 0 {
+            if self.read(self.h-1, j) == 0 {
                 legal.push(j)
             }
         }
@@ -60,7 +60,7 @@ impl Grid {
 
         let mut n_legal = 0.;
         for j in 0..self.w {
-            if self.array(self.h-1, j) == 0 {
+            if self.read(self.h-1, j) == 0 {
                 n_legal += 1.;
             }
         }
@@ -72,8 +72,8 @@ impl Grid {
     pub fn play(&mut self, col: usize) -> usize {
         // Returns the position where the played disc landed
         for row in 0..self.h {
-            if self.array(row, col) == 0 {
-                self.array_set(row, col, self.player_to_move());
+            if self.read(row, col) == 0 {
+                self.set(row, col, self.player_to_move());
                 self.turn += 1;
                 return row
             }
@@ -102,13 +102,13 @@ impl Grid {
     // Returns whether player 1, player 2 or neither (0) has won.
     // Used when exploring the move tree to check if a disc played at (row, col) results in victory.
     fn win_fast(&self, row: usize, col: usize) -> u8 {
-        let player = self.array(row, col);
+        let player = self.read(row, col);
         
         // Vertical line
         if row >= self.l-1 {
             'column_check: {
                 for i in 1..self.l {
-                    if self.array(row-i, col) != player {
+                    if self.read(row-i, col) != player {
                         break 'column_check
                     }
                 }
@@ -119,7 +119,7 @@ impl Grid {
         // Horizontal line
         let mut line_len = 1;
         for j in 1..(self.w-col) {
-            if self.array(row,col+j) == player {    // Rightward
+            if self.read(row,col+j) == player {    // Rightward
                 line_len += 1;
             }
             else {
@@ -127,7 +127,7 @@ impl Grid {
             }
         }
         for j in 1..=col {
-            if self.array(row,col-j) == player {    // Leftward
+            if self.read(row,col-j) == player {    // Leftward
                 line_len += 1;
             }
             else {
@@ -141,7 +141,7 @@ impl Grid {
         // Diagonal: /
         line_len = 1;
         for k in 1..(self.h-row).min(self.w-col) {
-            if self.array(row+k,col+k) == player {    // Up-rightward
+            if self.read(row+k,col+k) == player {    // Up-rightward
                 line_len += 1;
             }
             else {
@@ -149,7 +149,7 @@ impl Grid {
             }
         }
         for k in 1..(row+1).min(col+1) {
-            if self.array(row-k,col-k) == player {    // Down-leftward
+            if self.read(row-k,col-k) == player {    // Down-leftward
                 line_len += 1;
             }
             else {
@@ -162,7 +162,7 @@ impl Grid {
         // Diagonal: \
         line_len = 1;
         for k in 1..(self.h-row).min(col+1) {
-            if self.array(row+k,col-k) == player {    // Up-leftward
+            if self.read(row+k,col-k) == player {    // Up-leftward
                 line_len += 1;
             }
             else {
@@ -170,7 +170,7 @@ impl Grid {
             }
         }
         for k in 1..(row+1).min(self.w-col) {
-            if self.array(row-k,col+k) == player {    // Down-rightward
+            if self.read(row-k,col+k) == player {    // Down-rightward
                 line_len += 1;
             }
             else {
@@ -192,7 +192,7 @@ impl Grid {
         let mut p1_line: Vec<(usize, usize)> = Vec::with_capacity(self.l);
         let mut p2_line: Vec<(usize, usize)> = Vec::with_capacity(self.l);
         while (0..self.h).contains(&i) && (0..self.w).contains(&j) {
-            match self.array(i,j) {
+            match self.read(i,j) {
                 1 => {p1_line.push((i,j)); p2_line.clear()},
                 2 => {p1_line.clear(); p2_line.push((i,j))},
                 _ => {p1_line.clear(); p2_line.clear()}
@@ -201,12 +201,12 @@ impl Grid {
             // Highlights by changing 1 --> 10, 2 --> 20. 
             if p1_line.len() >= self.l {
                 for (i,j) in p1_line {
-                    self.array_set(i, j, 10*self.array(i, j))
+                    self.set(i, j, 10*self.read(i, j))
                 }
                 return 1
             } else if p2_line.len() >= self.l {
                 for (i,j) in p2_line {
-                    self.array_set(i, j, 10*self.array(i, j))
+                    self.set(i, j, 10*self.read(i, j))
                 }
                 return 2
             }
@@ -271,7 +271,7 @@ impl fmt::Display for Grid {
         for i in 0..self.h {
             output = format!("{output}\n");
             for j in 0..self.w {
-                output = match self.array(self.h-i-1, j) {
+                output = match self.read(self.h-i-1, j) {
                     0 => format!("{output}[ ]"),
                     1 => format!("{output}[o]"),
                     2 => format!("{output}[x]"),
@@ -333,10 +333,10 @@ impl Branch {
                         }
                     },
                     // One loss has the same magnitude as legal_moves.len() wins  
-                    w if w == protagonist => {           // The protagonist wins
+                    w if w == protagonist => {          // The protagonist wins
                         self.score += relevance/grid.n_legal_f64();
                     },
-                    _ => {                              // The other player wins
+                    _ => {                                  // The other player wins
                         self.score -= relevance;       
                     }
                 }
@@ -396,9 +396,276 @@ pub fn analyze_bfs_mt(grid: Grid, protagonist: u8, depth: u8) -> usize {
 }
 
 
+#[derive(Clone)]
+struct ThreatMap {
+    w: usize,
+    h: usize,
+    horizontal1: Vec<f64>,
+    horizontal2: Vec<f64>,
+    fwrd_slash1: Vec<f64>,
+    fwrd_slash2: Vec<f64>,
+    back_slash1: Vec<f64>,
+    back_slash2: Vec<f64>,
+}
+
+impl ThreatMap {
+    // Contains 6 grids that store the threat level of empty disc positions on the grid .
+    // The grids are indexed by threat shape: '-', '/', '\'; and player: 1, 2.  
+    // All grid positions start with threat level 1.
+    // Non-empty grid positions have have threat level 0.
+
+    fn new(grid: &Grid) -> Self {
+        let w = grid.w;
+        let h = grid.h;
+        
+        ThreatMap { w, h, horizontal1: vec![1.; w*h], horizontal2: vec![1.; w*h],
+                          fwrd_slash1: vec![1.; w*h], fwrd_slash2: vec![1.; w*h],
+                          back_slash1: vec![1.; w*h], back_slash2: vec![1.; w*h]
+        }
+    }
 
 
+    fn read(&self, i: usize, j: usize, threat_shape: char, player: u8) -> f64 {
+        match threat_shape {
+            '-' => {
+                match player {
+                    1 => return self.horizontal1[i*self.w + j],
+                    2 => return self.horizontal2[i*self.w + j],
+                    _ => panic!()
+                }
+            }
+            '/' => {
+                match player {
+                    1 => return self.fwrd_slash1[i*self.w + j],
+                    2 => return self.fwrd_slash2[i*self.w + j],
+                    _ => panic!()
+                }
+            }
+            '\\' => {
+                match player {
+                    1 => return self.back_slash1[i*self.w + j],
+                    2 => return self.back_slash2[i*self.w + j],
+                    _ => panic!()
+                }
+            }
+            _ => panic!()
+        }
+    }
 
+    fn increment(&mut self, i: usize, j: usize, threat_shape: char, player: u8) {
+        if (0..self.h).contains(&i) && (0..self.w).contains(&j) {
+            match threat_shape {
+                '-' => {
+                    match player {
+                        1 => self.horizontal1[i*self.w + j] += 1.,
+                        2 => self.horizontal2[i*self.w + j] += 1.,
+                        _ => panic!()
+                    }
+                }
+                '/' => {
+                    match player {
+                        1 => self.fwrd_slash1[i*self.w + j] += 1.,
+                        2 => self.fwrd_slash2[i*self.w + j] += 1.,
+                        _ => panic!()
+                    }
+                }
+                '\\' => {
+                    match player {
+                        1 => self.back_slash1[i*self.w + j] += 1.,
+                        2 => self.back_slash2[i*self.w + j] += 1.,
+                        _ => panic!()
+                    }
+                }
+                _ => panic!()
+            }
+        }
+    }
+    fn nullify(&mut self, i: usize, j: usize, threat_shape: char, player: u8) {
+        if (0..self.h).contains(&i) && (0..self.w).contains(&j) {
+            match threat_shape {
+                '-' => {
+                    match player {
+                        1 => self.horizontal1[i*self.w + j] = 0.,
+                        2 => self.horizontal2[i*self.w + j] = 0.,
+                        _ => panic!()
+                    }
+                }
+                '/' => {
+                    match player {
+                        1 => self.fwrd_slash1[i*self.w + j] = 0.,
+                        2 => self.fwrd_slash2[i*self.w + j] = 0.,
+                        _ => panic!()
+                    }
+                }
+                '\\' => {
+                    match player {
+                        1 => self.back_slash1[i*self.w + j] = 0.,
+                        2 => self.back_slash2[i*self.w + j] = 0.,
+                        _ => panic!()
+                    }
+                }
+                _ => panic!()
+            }
+        }
+    }
+
+    // Update the threatmap after player plays in (i,j)
+    fn update_with(&mut self, row: usize, col: usize, grid: &Grid) {
+        let player = grid.read(row, col);
+        
+        // Horizontal: -
+        self.nullify(row, col, '-', player);
+
+        let mut enclosure_extent_right = 0;
+        for k in 1..=grid.l {                               // Rightward
+            if k == self.w-col {
+                enclosure_extent_right = k-1;
+                break;                                  // Stops if it hits the wall
+            }
+            match grid.read(row,col+k) {
+                0 => {
+                    if k != grid.l {
+                        self.increment(row, col+k, '-', player);
+                    }
+                },
+                disc if disc == player => {
+                    enclosure_extent_right = k-1
+                },
+                disc if disc == 3-player => break,
+                _ => panic!()
+            }
+        }
+        let mut enclosure_extent_left = 0;
+        for k in 1..=grid.l {                               // Leftward
+            if k == col+1 {
+                enclosure_extent_left = k-1;
+                break;                                  // Stops if it hits the wall
+            }
+            match grid.read(row,col-k) {
+                0 => {
+                    if k != grid.l {
+                        self.increment(row, col-k, '-', player);
+                    }
+                },
+                disc if disc == player => {
+                    enclosure_extent_left = k-1
+                },
+                disc if disc == 3-player => break,
+                _ => panic!()
+            } 
+        }
+        // Nullify enclosed disc positions for the enemy
+        for j in col-enclosure_extent_left..=col+enclosure_extent_right {
+            self.nullify(row, j, '-', 3-player);
+        }
+        
+
+        // Diagonal: /
+        self.nullify(row, col, '/', 1);
+        self.nullify(row, col, '/', 2);
+
+        let mut enclosure_extent_up_right = 0;
+        for k in 1..=grid.l {                               // Up-rightward
+            if k == (self.h-row).min(self.w-col) {
+                enclosure_extent_up_right = k-1;
+                break;                                  // Stops if it hits the wall
+            }
+            match grid.read(row+k,col+k) {
+                0 => {
+                    if k != grid.l {
+                        self.increment(row+k, col+k, '/', player);
+                    }
+                },
+                disc if disc == player => {
+                    enclosure_extent_up_right = k-1
+                },
+                disc if disc == 3-player => break,
+                _ => panic!()
+            }
+        }
+        // Nullify enclosed disc positions for the enemy
+        for k in 1..=enclosure_extent_up_right {
+            self.nullify(row+k, col+k, '/', 3-player);
+        }
+
+        let mut enclosure_extent_down_left = 0;
+        for k in 1..=(row+1).min(col+1) {                   // Down-leftward
+            if k == (row+1).min(col+1) {
+                enclosure_extent_down_left = k-1;
+                break;                                  // Stops if it hits the wall
+            }
+            match grid.read(row-k,col-k) {
+                0 => {
+                    if k != grid.l {
+                        self.increment(row-k, col-k, '/', player);
+                    }
+                },
+                disc if disc == player => {
+                    enclosure_extent_down_left = k-1
+                },
+                disc if disc == 3-player => break,
+                _ => panic!()
+            }
+        }
+        // Nullify enclosed disc positions for the enemy
+        for k in 1..=enclosure_extent_down_left {
+            self.nullify(row-k, col-k, '/', 3-player);
+        }
+        
+        
+        // Diagonal: \
+        self.nullify(row, col, '\\', 1);
+        self.nullify(row, col, '\\', 2);
+
+        let mut enclosure_extent_up_left = 0;
+        for k in 1..=grid.l {                               // Up-leftward
+            if k == (self.h-row).min(col+1) {
+                enclosure_extent_up_left = k-1;
+                break;                                  // Stops if it hits the wall
+            }
+            match grid.read(row+k,col-k) {   
+                0 => {
+                    if k != grid.l {
+                        self.increment(row+k, col-k, '\\', player);
+                    }
+                },
+                disc if disc == player => {
+                    enclosure_extent_up_left = k-1
+                },
+                disc if disc == 3-player => break,
+                _ => panic!()
+            } 
+        }
+        // Nullify enclosed disc positions for the enemy
+        for k in 1..=enclosure_extent_up_left {
+            self.nullify(row+k, col-k, '\\', 3-player);
+        }
+
+        let mut enclosure_extent_down_right = 0;
+        for k in 1..=grid.l {                               // Down-rightward
+            if k == (row+1).min(self.w-col) {
+                enclosure_extent_down_right = k-1;
+                break;                                  // Stops if it hits the wall
+            }
+            match grid.read(row-k,col+k) {
+                0 => {
+                    if k != grid.l {
+                        self.increment(row-k, col+k, '\\', player);
+                    }
+                },
+                disc if disc == player => {
+                    enclosure_extent_down_right = k-1
+                },
+                disc if disc == 3-player => break,
+                _ => panic!()
+            }
+        }
+        // Nullify enclosed disc positions for the enemy
+        for k in 1..=enclosure_extent_down_right {
+            self.nullify(row+k, col+k, '\\', 3-player);
+        }
+    }
+}
 
 
 
@@ -406,13 +673,14 @@ pub fn analyze_bfs_mt(grid: Grid, protagonist: u8, depth: u8) -> usize {
 pub struct Node {
     // Structure used for minmax exploration
     grid: Grid,
-    horizontal_threat_lines: Vec<f64>,
+    threat_map: ThreatMap,
 }
-#[allow(dead_code)]
+
 impl Node {
     fn new(grid: Grid) -> Self {
-        let horizontal_threat_lines = vec![0.; grid.h*(grid.w-grid.l+1)];
-        Node {grid, horizontal_threat_lines}
+        let threat_map = ThreatMap::new(&grid);
+        
+        Node {grid, threat_map}
     }
 
     fn create_children(&self) -> HashMap<[usize; 2], Node> {
@@ -428,182 +696,17 @@ impl Node {
         children
     }
 
-
-    // Horizontal threats are stored between turns since the are easy to update without looking at the whole grid.
-    // A threat_line is a contiguous line of disc positions with length grid.l.
-    // An empty threat_line has level 0 if it contains discs of both types.
-    // A threat_line which contains discs of both types always has level f64::INFINITY but is counted as 0.
-    // A threat_line that contains D discs from player 1 has level +D.
-    // A threat_line that contains D discs from player 2 has level -D.
-
-    // The threat_lines are adressed by their leftmost disc position
-    fn update_threat_lines(&mut self, i: usize, j: usize) {
-        let player = self.grid.array(i, j);
-
-        let th_w: usize = self.grid.w - self.grid.l + 1;
-
-
-        // Horizontal threat_lines
-        let th_i = i;
-        let mut th_j = j;
-        for _ in 0..self.grid.l {
-            if th_j < th_w {
-                match player {
-                    1 => {
-                        match self.horizontal_threat_lines[th_i*th_w + th_j] {
-                            level if level.is_infinite() => continue,
-                            level if (level < 0.) => {
-                                self.horizontal_threat_lines[th_i*th_w + th_j] = f64::INFINITY
-                            },
-                            _  => {
-                                self.horizontal_threat_lines[th_i*th_w + th_j] += 1.
-                            },
-                        }
-                    },
-                    2 => {
-                        match self.horizontal_threat_lines[th_i*th_w + th_j] {
-                            level if level.is_infinite() => continue,
-                            level if (level > 0.) => {
-                                self.horizontal_threat_lines[th_i*th_w + th_j] = f64::INFINITY
-                            },
-                            _ => {
-                                self.horizontal_threat_lines[th_i*th_w + th_j] -= 1.
-                            }
-                        }
-                    },
-                    _ => panic!()       // This should be unreachable since (row,col) should not be empty
-                }
-            }
-            if th_j==0 {
-                break
-            }
-            th_j -= 1;
-        }
+    
+    
+    fn update_threat_map(&mut self, row: usize, col: usize) {
+        self.threat_map.update_with(row, col, &self.grid);
     }
-
-    fn get_value(&mut self, depth: u8, protagonist: u8, row: usize, col: usize, transp_table: &mut HashMap<u64, f64>) -> f64 {
-        // Get the value of this node from the values of its children recursively
-        // Also marks who won if this is a winning state
-        
-        // (row,col) is the position where the last disc was placed on the grid 
-        // protagonist denotes wich player the analysis is done for
-        
-        // Get cached value is this state has been seen before.
-        let state_id = calculate_hash(&self.grid);
-        match transp_table.get(&state_id) {
-            Some(stored_value) => return *stored_value,
-            _ => ()
-        }
-
-        let mut value: f64;
-        match self.grid.win_fast(row, col) {
-            0 => {                                  // No one wins
-
-                if depth == 0 {                                     // Depth limit reached
-                    value = self.heuristic1(protagonist);      
-                }      
-
-                else if self.grid.n_legal_f64() == 0. {             // Game over (draw)
-                    value = 0.
-                }
-                
-                else if self.grid.player_to_move() == protagonist {      // The protagonist's turn
-                    
-                    value = f64::NEG_INFINITY;                             
-                    
-                    // Clone the grid and try all possible moves
-                    for ([row, col], mut child) in self.create_children() {
-                        child.update_threat_lines(row, col);
-
-                        let child_value = child.get_value(depth-1, protagonist, row, col, transp_table);
-                        
-                        // Keep the maximal value
-                        if child_value > value {    
-                            value = child_value
-                        }
-                    }
-                }
-                else {                                                  // The other player's turn
-                    value = f64::INFINITY;
-
-                    // Clone the grid and try all possible moves
-                    for ([row, col], mut child) in self.create_children() {
-                        child.update_threat_lines(row, col);
-
-                        let child_value = child.get_value(depth-1, protagonist, row, col, transp_table);
-                        
-                        // Keep the minimal value
-                        if child_value < value {    
-                            value = child_value
-                        }
-                    }
-                }
-            },
-            w if w == protagonist => {          // The protagonist wins
-                value = 3e6;
-            },         
-            _ => {                                  // The other player wins
-                value = -3e6;
-            }                                  
-        }
-
-        transp_table.insert(state_id, value);
-        return value
-    }
-
-    // The length of the longest diagonal line that player would get if it placed a disk at (row,col).
-    // Returns zero if (row,col) is not empty.
-    fn diag_potential (&self, row: usize, col: usize, player: u8) -> f64 {
-        if self.grid.array(row, col) != 0{
-            return 0.
-        }
-        
-        // Forward slash direction: /
-        let mut fs_line_len: f64 = 1.;                                    
-        for k in 1..(self.grid.h-row).min(self.grid.w-col) {
-            if self.grid.array(row+k,col+k) == player {    // Up-rightward
-                fs_line_len += 1.;
-            }
-            else {
-                break
-            }
-        }
-        for k in 1..(row+1).min(col+1) {
-            if self.grid.array(row-k,col-k) == player {    // Down-leftward
-                fs_line_len += 1.;
-            }
-            else {
-                break
-            }
-        }
-        // Backslash direction: \
-        let mut bs_line_len: f64 = 1.;
-        for k in 1..(self.grid.h-row).min(col+1) {
-            if self.grid.array(row+k,col-k) == player {    // Up-leftward
-                bs_line_len += 1.;
-            }
-            else {
-                break
-            }
-        }
-        for k in 1..(row+1).min(self.grid.w-col) {
-            if self.grid.array(row-k,col+k) == player {    // Down-rightward
-                bs_line_len += 1.;
-            }
-            else {
-                break
-            }
-        }
-        return fs_line_len.max(bs_line_len)
-    }
-
     // Horizontal and diagonal threats on rows with prefered parity.
     // Player 1 wants threats in even rows, player 2 in odd rows. The bottom row is row 0.
     // Only works if self.h is even.
-    fn heuristic1(&self, protagonist: u8) -> f64 {
+    fn heuristic(&self, protagonist: u8) -> f64 {
         if self.grid.h%2 == 1 {
             panic!();
-            // return 0.
         }
         let mut score = 0.;
 
@@ -618,67 +721,137 @@ impl Node {
 
             let mut row_score = 0.;
             
-            let th_w: usize = self.grid.w - self.grid.l + 1;
-
-            // Horizontal threats
-            let th_i = i;
-            for th_j in 0..th_w {
-                // There are (grid.w-grid.l+1) different ways to win horizontally in every row
-                let threat_level = self.horizontal_threat_lines[th_i*th_w + th_j];
-                
-                if threat_level.is_infinite() {
-                    continue
-                }
-                else if threat_level >= (self.grid.l as f64) -1. {
-                    row_score += 1e2
-                }
-                else {
-                    row_score += threat_level
-                }
-            }
-            
-            
-            // Diagonal threats
             for j in 0..self.grid.w {
-                let diag_pot = self.diag_potential(i, j, correct_parity_disc);
-                
-                if diag_pot >= self.grid.l as f64 {
-                    row_score += 1e2
-                }
-                else {
-                    row_score += diag_pot
+                for threat_shape in ['-', '/', '\\'] {
+                    row_score += self.threat_map.read(i, j, threat_shape, correct_parity_disc).powi(2)
                 }
             }
-
+            
             // Lower threats are worth more 
             score += sign*row_score/(1.+i as f64)
         }
         
         return score
     }
+    fn get_value_alpha_beta(&mut self, depth: u8, protagonist: u8, row: usize, col: usize, 
+                            parent_alpha: f64, parent_beta: f64, transp_table: &mut HashMap<u64, (f64, i8)>) -> f64 {
+        // Get the value of this node from the values of its children recursively
+        // 
+        // protagonist denotes wich player the analysis is done for
+        // (row,col) is the position where the last disc was placed on the grid 
+        // Transposition table for alpha-beta pruning minmax search.
+        // 
+        // Second tuple entry in transposition table is the value type:
+        //      0 means exact value,
+        //      -1 means alpha value,
+        //      +1 means beta value.
+        
+        let mut alpha = parent_alpha;
+        let mut beta = parent_beta;
 
+        // Get cached value if this state has been seen before.
+        let state_id = calculate_hash(&self.grid);
+        match transp_table.get(&state_id) {
+            Some((stored_value, stored_type))  => {
+                match stored_type {
+                    -1 => alpha = alpha.max(*stored_value),         // Alpha value
+                    0 => return *stored_value,                      // Exact value
+                    1 => beta = beta.max(*stored_value),            // Beta value
+                    _ => panic!()
+                }
+                if alpha >= beta {
+                    return *stored_value
+                }
+            },
+            _ => ()
+        }
+
+        let mut value_type = 0;
+
+        let mut value: f64;
+        match self.grid.win_fast(row, col) {
+            0 => {                                  // No one wins
+
+                if depth == 0 {                                     // Depth limit reached
+                    value = self.heuristic(protagonist);      
+                }      
+
+                else if self.grid.n_legal_f64() == 0. {             // Game over (draw)
+                    value = 0.
+                }
+                
+                else if self.grid.player_to_move() == protagonist {      // The protagonist's turn
+                    
+                    value = f64::NEG_INFINITY;                             
+                    
+                    // Clone the grid and try all possible moves.
+                    for ([row, col], mut child) in self.create_children(){
+                        child.update_threat_map(row, col);
+                        let child_value = child.get_value_alpha_beta(depth-1, protagonist, row, col, 
+                                                                          alpha, beta, transp_table);
+                        
+                        // Keep the maximal value
+                        value = value.max(child_value);
+                        alpha = alpha.max(value);
+
+                        if beta <= alpha {
+                            value_type = -1;                // Store value type: alpha
+                            break                           // Beta prune
+                        }
+                    }
+                }
+                else {                                                  // The other player's turn
+                    value = f64::INFINITY;
+
+                    // Clone the grid and try all possible moves.
+                    for ([row, col], mut child) in self.create_children() {
+                        child.update_threat_map(row, col);
+                        let child_value = child.get_value_alpha_beta(depth-1, protagonist, row, col, 
+                                                                          alpha, beta, transp_table);
+                        
+                        // Keep the minimal value
+                        value = value.min(child_value);
+                        beta = beta.min(value);
+
+                        if beta <= alpha {
+                            value_type = 1;                 // Store value type: beta
+                            break                           // Alpha prune
+                        }
+                    }
+                }
+            },
+            w if w == protagonist => {          // The protagonist wins
+                value = 3e6;
+            },         
+            _ => {                                  // The other player wins
+                value = -3e6;
+            }                                  
+        }
+
+        transp_table.insert(state_id, (value, value_type));
+        return value
+    }
 }
-pub fn analyze_minmax(grid: Grid, protagonist: u8, depth: u8) -> (usize, f64) {
-    // This version does not save earlier work
 
-    // Will play the move with the highest score 
-    // Randomness is caused by internal reordering of the hashMaps when they are cloned
-    
+pub fn analyze_alphabeta(grid: Grid, protagonist: u8, depth: u8) -> (usize, f64) {
+    // Will play the move with the highest value 
+
     let mut best_col = grid.width();  // This is an illegal move but should always be overridden.
-    // let capacity = grid.l.pow(depth as u32);
+    
     let root_node = Node::new(grid);
 
-    // let mut transp_table: HashMap<u64, f64> = HashMap::with_capacity(capacity);
-    let mut transp_table: HashMap<u64, f64> = HashMap::new();
+    let mut transp_table: HashMap<u64, (f64, i8)> = HashMap::new();
     
     
     let mut best_value = f64::NEG_INFINITY;
     let mut best_immediate_value = f64::NEG_INFINITY;
     for ([row, col], mut child) in root_node.create_children() {
-        child.update_threat_lines(row, col);
+        child.update_threat_map(row, col);
 
-        let child_value = child.get_value(depth-1, protagonist, row, col, &mut transp_table);
-        let child_immediate_value = child.heuristic1(protagonist);
+        let child_value = child.get_value_alpha_beta(depth-1, protagonist, row, col, 
+                                                          f64::NEG_INFINITY, f64::INFINITY,
+                                                          &mut transp_table);
+        let child_immediate_value = child.heuristic(protagonist);
 
         if child_value >= best_value {
             if (child_value == best_value) && (child_immediate_value <= best_immediate_value) {
