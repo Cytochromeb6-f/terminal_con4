@@ -12,7 +12,7 @@ The computer opponent will use a different algorithm depending on if the column 
 
 If $h$ is odd then it uses a BFS search and picks the branch where it has the highest number of ways it can win compared to the number of ways it can lose. This exploration algorithm is multithreaded and will run one process per non-full column.
 
-When $h$ is even then every horizontal and diagonal threats have an intrinsic parity. In this case the computer opponent will use a minmax search with a heuristic that prioritizes low threats with the prefered parity. This algorithm is enhanced with $\alpha$ - $\beta$ pruning and repeated states caching. This makes it much faster than the other algorithm.
+When $h$ is even, every horizontal and diagonal threat has an intrinsic parity. In this case the computer opponent will use a minmax search with a heuristic that prioritizes low threats with the prefered parity. This algorithm is enhanced with $\alpha$ - $\beta$ pruning and repeated states caching. This makes it much faster than the other algorithm.
 
 ## Difficulty
 
